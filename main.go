@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -27,14 +28,18 @@ type contact struct {
 	UpdatedOn    time.Time `db:"updated_on"`
 }
 
+var isDev bool
+
 func (c contact) String() string {
 	return fmt.Sprintf("Contact name: %s, email: %s, phone: %s", c.Name, c.Email, c.Phone)
 }
 
 func init() {
 	if _, exists := os.LookupEnv("DEV"); exists {
-		// this is the dev environment, write to console
+		// this is the dev environment, write to console and set var
+		isDev = true
 		log.SetOutput(os.Stdout)
+		log.SetLevel(log.DebugLevel)
 	} else {
 		// this is prod, write to a file
 		// this block will failed if ran in prod without sudo priviliges
@@ -54,12 +59,14 @@ func main() {
 	// Make sure we can connect
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	dbx, err = sqlx.ConnectContext(ctx, "postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatalf("Failed to set up postgres conn: %v", err)
 	}
 
-	tickChan := time.Tick(5 * time.Second)
+	// new contact loop
+	tickChan := time.Tick(30 * time.Second)
 	for {
 		select {
 		case <-tickChan:
@@ -102,10 +109,10 @@ func checkContacts(dbx *sqlx.DB) error {
 }
 
 func sendToPOC(c contact, sid, auth string) error {
-	return nil
 	var (
 		urlStr = "https://api.twilio.com/2010-04-01/Accounts/" + sid + "/Messages.json"
 		client = &http.Client{}
+		err    error
 	)
 	// Format the message to send to sgs admins
 	msg := formatMessage(c)
@@ -115,22 +122,29 @@ func sendToPOC(c contact, sid, auth string) error {
 	req.SetBasicAuth(sid, auth)
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
 	// Send it!
-	if _, err := client.Do(req); err != nil {
-		return err
+	resp, _ := client.Do(req)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		var data map[string]interface{}
+		decoder := json.NewDecoder(resp.Body)
+		if e := decoder.Decode(&data); e != nil {
+			log.Debugf("Failed to parse response after sending message: %v", e)
+		}
+		log.Debugf("Response from sent message: %v", data)
+	} else {
+		err = fmt.Errorf("Failed to send message to contact. Issue: %v", resp.Status)
 	}
-	log.Info("Send message to sgs admin")
-	return nil
+	return err
 }
 
 func formatMessage(c contact) strings.Reader {
 	var msgToPOC = "We are being contacted by '%s' with email: '%s' and phone number '%s'" +
-		"for the following reason: '%s'.\n Please acknowledged receipt of this contact by texting back 'DONE'"
+		"for the following reason: '%s'.\n" +
+		"Please acknowledged receipt of this contact by replying '%s' to this message."
 	msgData := url.Values{}
-	//msgData.Set("To", "2526758398")
-	msgData.Set("To", "12527238360")
-	msgData.Set("From", "12524604466")
-	msgData.Set("Body", fmt.Sprintf(msgToPOC, c.Name, c.Email, c.Phone, c.Message))
+	msgData.Set("From", os.Getenv("TWILIO_FROM_NUMBER"))
+	msgData.Set("To", os.Getenv("TWILIO_TO_NUMBER"))
+	msgData.Set("provideFeedback", "true")
+	msgData.Set("Body", fmt.Sprintf(msgToPOC, c.Name, c.Email, c.Phone, c.Message, c.ID))
 	return *strings.NewReader(msgData.Encode())
 }
