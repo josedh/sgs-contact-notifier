@@ -66,10 +66,25 @@ func main() {
 	}
 
 	// new contact loop
-	tickChan := time.Tick(30 * time.Second)
+	tickChan := time.Tick(3 * time.Hour)
 	for {
 		select {
 		case <-tickChan:
+			loc, err := time.LoadLocation("America/New_York")
+			if err != nil {
+				log.Errorf("Failed to load EST location for date data, please contact webmaster")
+			}
+			currTime := time.Now()
+			start := time.Date(currTime.Year(), currTime.Month(), currTime.Day(), 9, 00, 00, 00, loc)
+			end := time.Date(currTime.Year(), currTime.Month(), currTime.Day(), 15, 00, 00, 00, loc)
+			if currTime.Before(start) ||
+				currTime.After(end) ||
+				currTime.Weekday() == time.Saturday ||
+				currTime.Weekday() == time.Sunday {
+				// if outside work hours, don't message
+				log.Info("Outside of work hours, skipping notifications")
+				continue
+			}
 			log.Infof("Checking sgs.com contacts table at: %v", time.Now().String())
 			if err := checkContacts(dbx); err != nil {
 				// there was an error checking for new contacts, log and report
