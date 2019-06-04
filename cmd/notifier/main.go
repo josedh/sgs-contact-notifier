@@ -120,6 +120,10 @@ func sendToPOC(c models.Contact, sid, auth string) error {
 	req.SetBasicAuth(sid, auth)
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	log.Infof("REQUEST: %v", req)
+
+	return nil
 	// Send it!
 	resp, _ := client.Do(req)
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
