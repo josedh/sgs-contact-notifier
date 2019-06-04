@@ -51,5 +51,9 @@
 			"revisionTime": "2019-05-25T10:09:16Z"
 		}
 	],
-	"rootPath": "sgs-notifier"
+	"rootPath": "sgs-notifier",
+    "heroku": {
+        "go": "1.12.5",
+        "install": ["./models", "./cmd/..."]
+    }
 }
