@@ -1,1 +1,1 @@
-worker: notifier
+worker: ./bin/notifier
