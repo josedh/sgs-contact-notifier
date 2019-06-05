@@ -17,22 +17,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var isDev bool
-
 func init() {
+	log.SetLevel(log.InfoLevel)
 	if _, exists := os.LookupEnv("DEV"); exists {
-		// this is the dev environment, write to console and set var
-		isDev = true
-		log.SetOutput(os.Stdout)
 		log.SetLevel(log.DebugLevel)
-	} else {
-		// this is prod, write to a file
-		// this block will failed if ran in prod without sudo priviliges
-		if f, err := os.Create("/var/log/sgs/notifier.log"); err != nil {
-			log.SetOutput(os.Stdout)
-		} else {
-			log.SetOutput(f)
-		}
 	}
 }
 
@@ -66,7 +54,7 @@ func main() {
 			//currTime.Weekday() == time.Saturday ||
 			currTime.Weekday() == time.Sunday {
 			// if outside work hours, don't message
-			log.Info("Outside of work hours, skipping notifications")
+			log.Warn("Outside of work hours, skipping notifications")
 			continue
 		}
 		log.Infof("Checking sgs.com contacts table at: %v", time.Now().String())
